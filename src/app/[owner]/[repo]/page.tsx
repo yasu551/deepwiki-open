@@ -8,6 +8,7 @@ import Link from 'next/link';
 import ThemeToggle from '@/components/theme-toggle';
 import Markdown from '@/components/Markdown';
 import Ask from '@/components/Ask';
+import AskHistory from '@/components/AskHistory';
 import ModelSelectionModal from '@/components/ModelSelectionModal';
 import WikiTreeView from '@/components/WikiTreeView';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -1942,13 +1943,16 @@ IMPORTANT:
 
       {/* Floating Chat Button */}
       {!isLoading && wikiStructure && (
-        <button
-          onClick={() => setIsAskModalOpen(true)}
-          className="fixed bottom-6 right-6 w-14 h-14 rounded-full bg-[var(--accent-primary)] text-white shadow-lg flex items-center justify-center hover:bg-[var(--accent-primary)]/90 transition-all z-50"
-          aria-label={messages.ask?.title || 'Ask about this repository'}
-        >
-          <FaComments className="text-xl" />
-        </button>
+        <>
+          <button
+            onClick={() => setIsAskModalOpen(true)}
+            className="fixed bottom-6 right-6 w-14 h-14 rounded-full bg-[var(--accent-primary)] text-white shadow-lg flex items-center justify-center hover:bg-[var(--accent-primary)]/90 transition-all z-50"
+            aria-label={messages.ask?.title || 'Ask about this repository'}
+          >
+            <FaComments className="text-xl" />
+          </button>
+          <AskHistory repoInfo={repoInfo} />
+        </>
       )}
 
       {/* Ask Modal - Always render but conditionally show/hide */}

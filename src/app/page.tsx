@@ -351,6 +351,9 @@ export default function Home() {
                   <div className="text-center sm:text-left">
                     <h2 className="text-2xl font-bold text-[var(--foreground)] font-serif mb-1">{t('projects.existingProjects')}</h2>
                     <p className="text-[var(--accent-primary)] text-sm max-w-md">{t('projects.browseExisting')}</p>
+                    <Link href="/ask-history/projects" className="text-sm underline text-[var(--accent-primary)]">
+                      View Ask History
+                    </Link>
                   </div>
                 </div>
               </div>

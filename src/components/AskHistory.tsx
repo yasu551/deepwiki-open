@@ -45,7 +45,7 @@ const AskHistory: React.FC<AskHistoryProps> = ({ repoInfo }) => {
     <>
       <button
         onClick={toggle}
-        className="fixed bottom-6 right-24 w-10 h-10 rounded-full bg-[var(--accent-primary)] text-white shadow-lg flex items-center justify-center hover:bg-[var(--accent-primary)]/90 transition-all z-50"
+        className="fixed bottom-6 right-24 w-14 h-14 rounded-full bg-[var(--accent-primary)] text-white shadow-lg flex items-center justify-center hover:bg-[var(--accent-primary)]/90 transition-all z-50"
         aria-label="Ask History"
       >
         <FaHistory />

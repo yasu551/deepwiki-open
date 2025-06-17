@@ -105,6 +105,21 @@ class WikiExportRequest(BaseModel):
     pages: List[WikiPage] = Field(..., description="List of wiki pages to export")
     format: Literal["markdown", "json"] = Field(..., description="Export format (markdown or json)")
 
+# --- Ask History Models ---
+class AskHistoryItem(BaseModel):
+    """Model for an Ask history entry."""
+    owner: str
+    repo: str
+    question: str
+    answer: str
+    timestamp: int
+
+class AskHistoryProjectEntry(BaseModel):
+    owner: str
+    repo: str
+    name: str
+    submittedAt: int
+
 # --- Model Configuration Models ---
 class Model(BaseModel):
     """
@@ -393,6 +408,10 @@ app.add_websocket_route("/ws/chat", handle_websocket_chat)
 WIKI_CACHE_DIR = os.path.join(get_adalflow_default_root_path(), "wikicache")
 os.makedirs(WIKI_CACHE_DIR, exist_ok=True)
 
+# Directory for storing Ask history files, similar to the wiki cache
+ASK_HISTORY_DIR = os.path.join(get_adalflow_default_root_path(), "askhistory")
+os.makedirs(ASK_HISTORY_DIR, exist_ok=True)
+
 def get_wiki_cache_path(owner: str, repo: str, repo_type: str, language: str) -> str:
     """Generates the file path for a given wiki cache."""
     filename = f"deepwiki_cache_{repo_type}_{owner}_{repo}_{language}.json"
@@ -443,6 +462,73 @@ async def save_wiki_cache(data: WikiCacheRequest) -> bool:
     except Exception as e:
         logger.error(f"Unexpected error saving wiki cache to {cache_path}: {e}", exc_info=True)
         return False
+
+# --- Ask History Helper Functions ---
+
+def get_ask_history_path(owner: str, repo: str) -> str:
+    """Generate the file path for an Ask history file."""
+    filename = f"ask_history_{owner}_{repo}.json"
+    return os.path.join(ASK_HISTORY_DIR, filename)
+
+async def read_ask_history(owner: str, repo: str) -> List[AskHistoryItem]:
+    path = get_ask_history_path(owner, repo)
+    if os.path.exists(path):
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                return [AskHistoryItem(**item) for item in data]
+        except Exception as e:
+            logger.error(f"Error reading ask history from {path}: {e}")
+    return []
+
+async def append_ask_history(item: AskHistoryItem) -> bool:
+    path = get_ask_history_path(item.owner, item.repo)
+    history = await read_ask_history(item.owner, item.repo)
+    history.append(item)
+    try:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump([h.model_dump() for h in history], f, indent=2)
+        return True
+    except Exception as e:
+        logger.error(f"Error writing ask history to {path}: {e}")
+        return False
+
+@app.get("/api/ask_history_projects", response_model=List[AskHistoryProjectEntry])
+async def get_ask_history_projects():
+    """List all repositories that have Ask history."""
+    entries: List[AskHistoryProjectEntry] = []
+    try:
+        if not os.path.exists(ASK_HISTORY_DIR):
+            return []
+
+        filenames = await asyncio.to_thread(os.listdir, ASK_HISTORY_DIR)
+        for filename in filenames:
+            if filename.startswith("ask_history_") and filename.endswith(".json"):
+                path = os.path.join(ASK_HISTORY_DIR, filename)
+                try:
+                    stats = await asyncio.to_thread(os.stat, path)
+                    parts = filename.replace("ask_history_", "").replace(".json", "").split('_')
+                    if len(parts) >= 2:
+                        owner = parts[0]
+                        repo = "_".join(parts[1:])
+                        entries.append(
+                            AskHistoryProjectEntry(
+                                owner=owner,
+                                repo=repo,
+                                name=f"{owner}/{repo}",
+                                submittedAt=int(stats.st_mtime * 1000)
+                            )
+                        )
+                except Exception as e:
+                    logger.error(f"Error processing ask history file {path}: {e}")
+                    continue
+
+        entries.sort(key=lambda e: e.submittedAt, reverse=True)
+        return entries
+    except Exception as e:
+        logger.error(f"Error listing ask history from {ASK_HISTORY_DIR}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to list ask history projects")
 
 # --- Wiki Cache API Endpoints ---
 
@@ -620,3 +706,21 @@ async def get_processed_projects():
     except Exception as e:
         logger.error(f"Error listing processed projects from {WIKI_CACHE_DIR}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to list processed projects from server cache.")
+
+# --- Ask History API Endpoints ---
+
+@app.get("/api/ask_history")
+async def get_ask_history(owner: str = Query(...), repo: str = Query(...)):
+    """Retrieve Ask history for a repository."""
+    history = await read_ask_history(owner, repo)
+    return [item.model_dump() for item in history]
+
+
+@app.post("/api/ask_history")
+async def store_ask_history(item: AskHistoryItem):
+    """Append a new Ask history entry for a repository."""
+    success = await append_ask_history(item)
+    if success:
+        return {"message": "Ask history saved successfully"}
+    raise HTTPException(status_code=500, detail="Failed to save ask history")
+

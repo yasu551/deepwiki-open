@@ -161,6 +161,24 @@ const Ask: React.FC<AskProps> = ({
     }
   };
 
+  // Persist question and answer to the ask history API
+  const saveHistory = async (q: string, a: string) => {
+    try {
+      await fetch('/api/ask-history', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          owner: repoInfo.owner,
+          repo: repoInfo.repo,
+          question: q,
+          answer: a
+        })
+      });
+    } catch (err) {
+      console.error('Failed to save ask history', err);
+    }
+  };
+
   // Function to check if research is complete based on response content
   const checkIfResearchComplete = (content: string): boolean => {
     // Check for explicit final conclusion markers
@@ -376,8 +394,12 @@ const Ask: React.FC<AskProps> = ({
             fullResponse += completionNote;
             setResponse(fullResponse);
             setResearchComplete(true);
+            saveHistory(question, fullResponse);
           } else {
             setResearchComplete(isComplete);
+            if (isComplete) {
+              saveHistory(question, fullResponse);
+            }
           }
 
           setIsLoading(false);
@@ -456,8 +478,12 @@ const Ask: React.FC<AskProps> = ({
         fullResponse += completionNote;
         setResponse(fullResponse);
         setResearchComplete(true);
+        saveHistory(question, fullResponse);
       } else {
         setResearchComplete(isComplete);
+        if (isComplete) {
+          saveHistory(question, fullResponse);
+        }
       }
     } catch (error) {
       console.error('Error during HTTP fallback:', error);
@@ -601,7 +627,11 @@ const Ask: React.FC<AskProps> = ({
             if (!isComplete) {
               setResearchIteration(1);
               // The continueResearch function will be triggered by the useEffect
+            } else {
+              saveHistory(question, fullResponse);
             }
+          } else {
+            saveHistory(question, fullResponse);
           }
 
           setIsLoading(false);

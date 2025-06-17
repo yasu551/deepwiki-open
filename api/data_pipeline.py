@@ -13,6 +13,7 @@ from adalflow.utils import get_adalflow_default_root_path
 from adalflow.core.db import LocalDB
 from api.config import configs, DEFAULT_EXCLUDED_DIRS, DEFAULT_EXCLUDED_FILES
 from api.ollama_patch import OllamaDocumentProcessor
+from pathspec import PathSpec
 from urllib.parse import urlparse, urlunparse, quote
 import requests
 from requests.exceptions import RequestException
@@ -127,6 +128,18 @@ def download_repo(repo_url: str, local_path: str, type: str = "github", access_t
 # Alias for backward compatibility
 download_github_repo = download_repo
 
+def load_gitignore_spec(repo_path: str) -> PathSpec | None:
+    """Return a ``PathSpec`` compiled from ``.gitignore`` if one exists."""
+    gitignore_path = os.path.join(repo_path, ".gitignore")
+    if not os.path.exists(gitignore_path):
+        return None
+    try:
+        with open(gitignore_path, "r", encoding="utf-8") as f:
+            return PathSpec.from_lines("gitwildmatch", f)
+    except Exception as e:
+        logger.warning(f"Failed to load .gitignore: {e}")
+        return None
+
 def read_all_documents(path: str, is_ollama_embedder: bool = None, excluded_dirs: List[str] = None, excluded_files: List[str] = None,
                       included_dirs: List[str] = None, included_files: List[str] = None):
     """
@@ -203,6 +216,10 @@ def read_all_documents(path: str, is_ollama_embedder: bool = None, excluded_dirs
 
     logger.info(f"Reading documents from {path}")
 
+    gitignore_spec = load_gitignore_spec(path)
+    if gitignore_spec:
+        logger.info("Loaded .gitignore patterns")
+
     def should_process_file(file_path: str, use_inclusion: bool, included_dirs: List[str], included_files: List[str],
                            excluded_dirs: List[str], excluded_files: List[str]) -> bool:
         """
@@ -221,6 +238,11 @@ def read_all_documents(path: str, is_ollama_embedder: bool = None, excluded_dirs
         """
         file_path_parts = os.path.normpath(file_path).split(os.sep)
         file_name = os.path.basename(file_path)
+        relative = os.path.relpath(file_path, path)
+        relative_posix = relative.replace(os.sep, "/")
+
+        if gitignore_spec and gitignore_spec.match_file(relative_posix):
+            return False
 
         if use_inclusion:
             # Inclusion mode: file must be in included directories or match included files
